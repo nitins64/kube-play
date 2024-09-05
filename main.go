@@ -13,7 +13,6 @@ import (
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/tools/clientcmd"
-	"k8s.io/klog/v2"
 	"os"
 	"path/filepath"
 	"time"
@@ -79,17 +78,17 @@ func main() {
 	stopper := make(chan struct{})
 	defer close(stopper)
 
-	//_, err = ListPods(*namespace, clientSourceset)
-	//if err != nil {
-	//	fmt.Println(err.Error())
-	//	os.Exit(1)
-	//}
-	//
-	//_, err = ListPods(*namespace, clientDestset)
-	//if err != nil {
-	//	fmt.Println(err.Error())
-	//	os.Exit(1)
-	//}
+	_, err = ListPods(*namespace, clientSourceset)
+	if err != nil {
+		fmt.Println(err.Error())
+		os.Exit(1)
+	}
+
+	_, err = ListPods(*namespace, clientDestset)
+	if err != nil {
+		fmt.Println(err.Error())
+		os.Exit(1)
+	}
 
 	go WatchPods(*namespace, clientSourceset, stopper)
 	go WatchPods(*namespace, clientDestset, stopper)
@@ -100,7 +99,7 @@ func main() {
 func WatchPods(namespace string, ncs NameClientset, stopper chan struct{}) {
 
 	// create shared informers for resources in all known API group versions with a reSync period and namespace
-	factory := informers.NewSharedInformerFactoryWithOptions(ncs.clientset, 10*time.Second, informers.WithNamespace("demo"))
+	factory := informers.NewSharedInformerFactoryWithOptions(ncs.clientset, 10*time.Minute, informers.WithNamespace(namespace))
 	podInformer := factory.Core().V1().Pods().Informer()
 
 	defer runtime.HandleCrash()
@@ -110,7 +109,7 @@ func WatchPods(namespace string, ncs NameClientset, stopper chan struct{}) {
 
 	// start to sync and call list
 	if !cache.WaitForCacheSync(stopper, podInformer.HasSynced) {
-		runtime.HandleError(fmt.Errorf("Timed out waiting for caches to sync"))
+		runtime.HandleError(fmt.Errorf("timed out waiting for caches to sync"))
 		return
 	}
 
@@ -124,25 +123,25 @@ func WatchPods(namespace string, ncs NameClientset, stopper chan struct{}) {
 
 func onAdd(obj interface{}) {
 	pod := obj.(*corev1.Pod)
-	klog.Infof("POD CREATED: %s/%s", pod.Namespace, pod.Name)
+	fmt.Printf("Time:%s POD CREATED: %s/%s \n", time.Now().Format(time.RFC850), pod.Namespace, pod.Name)
 }
 
 func onUpdate(oldObj interface{}, newObj interface{}) {
 	oldPod := oldObj.(*corev1.Pod)
 	newPod := newObj.(*corev1.Pod)
-	klog.Infof(
-		"POD UPDATED. %s/%s %s",
-		oldPod.Namespace, oldPod.Name, newPod.Status.Phase,
+	fmt.Printf(
+		"Time:%s POD UPDATED. %s/%s %s oldDelete:%s newDelete:%s \n", time.Now().Format(time.RFC850),
+		oldPod.Namespace, oldPod.Name, newPod.Status.Phase, oldPod.DeletionTimestamp, newPod.DeletionTimestamp,
 	)
 }
 
 func onDelete(obj interface{}) {
 	pod := obj.(*corev1.Pod)
-	klog.Infof("POD DELETED: %s/%s", pod.Namespace, pod.Name)
+	fmt.Printf("Time:%s POD DELETED: %s/%s \n", time.Now().Format(time.RFC850), pod.Namespace, pod.Name)
 }
 
 func ListPods(namespace string, ncs NameClientset) (*v1.PodList, error) {
-	fmt.Printf("Get Kubernetes Pods from namespace:%s for context: %s\n", namespace, ncs.name)
+	fmt.Printf("Get Kubernetes Pods from namespace:%s for context: %s\n\n", namespace, ncs.name)
 	pods, err := ncs.clientset.CoreV1().Pods(namespace).List(context.Background(), metav1.ListOptions{})
 	if err != nil {
 		err = fmt.Errorf("error getting pods: %v\n", err)
