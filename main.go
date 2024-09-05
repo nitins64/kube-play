@@ -65,7 +65,7 @@ func main() {
 
 	clientDestset, err := getClientSet(*contextDestName, kubeConfigPath)
 	if err != nil {
-		fmt.Printf("error getting kubernetes config: %v\n", err)
+		fmt.Printf("error  getting kubernetes config: %v\n", err)
 		os.Exit(1)
 	}
 
