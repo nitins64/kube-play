@@ -163,3 +163,9 @@ func ListPods(namespace string, ncs NameClientset) (*v1.PodList, error) {
 //https://github.com/karmada-io/karmada/tree/master/operator
 // https://www.cncf.io/blog/2022/09/26/karmada-and-open-cluster-management-two-new-approaches-to-the-multicluster-fleet-management-challenge/
 // https://multicluster.sigs.k8s.io/concepts/work-api/
+
+// Kubernetes: https://github.com/vmware-archive/tgik/blob/master/episodes/004/README.md
+
+// https://github.com/corfudb
+// Delos: https://research.facebook.com/file/421830459717012/Log-structured-Protocols-in-Delos.pdf
+//Tango: https://github.com/derekelkins/tangohs
