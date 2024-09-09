@@ -168,4 +168,6 @@ func ListPods(namespace string, ncs NameClientset) (*v1.PodList, error) {
 
 // https://github.com/corfudb
 // Delos: https://research.facebook.com/file/421830459717012/Log-structured-Protocols-in-Delos.pdf
-//Tango: https://github.com/derekelkins/tangohs
+// Tango: https://github.com/derekelkins/tangohs
+
+// Similar to Delo: https://github.com/ut-osa/boki
