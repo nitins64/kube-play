@@ -1,0 +1,23 @@
+- vCluster
+-- Main sync loop in vcluster/pkg/syncer/syncer.go
+--- Function: func (r *SyncController) Reconcile(ctx context.Context, origReq ctrl.Request) (_ ctrl.Result, retErr error) {
+
+----- Each resource has its own syncer Pod: (vcluster/pkg/controllers/resources/pods/syncer.go)
+
+Reconcile function is called for each resource in the vCluster. It internally calls the syncer for the resource.
+
+
+vcluster/pkg/syncer/syncer.go is implemented as a controller-runtime controller. (https://sdk.operatorframework.io/docs/building-operators/golang/references/client/)
+It watches the vCluster resource and calls the Reconcile function for each vCluster resource.
+
+vcluster/pkg/controllers/register.go registers the vCluster controller (syncer) with the manager.
+
+
+
+TODO:
+- [understand for/own to watch for event: https://yash-kukreja-98.medium.com/develop-on-kubernetes-series-demystifying-the-for-vs-owns-vs-watches-controller-builders-in-c11ab32a046e]
+    You might be noticing a ton of flaws here like missing finalizers resolution, missing status reporting ????
+- Read about kubebuilder and controller-runtime architecture : https://book.kubebuilder.io/architecture
+    + https://sdk.operatorframework.io/docs/building-operators/golang/references/client/
+    + https://sdk.operatorframework.io/docs/building-operators/golang/references/controller/
+    + https://book.kubebuilder.io/cronjob-tutorial/cronjob-tutorial

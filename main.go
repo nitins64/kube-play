@@ -171,3 +171,6 @@ func ListPods(namespace string, ncs NameClientset) (*v1.PodList, error) {
 // Tango: https://github.com/derekelkins/tangohs
 
 // Similar to Delo: https://github.com/ut-osa/boki
+
+// vCluster vs Karmada -- cost of keeping the upgrading clusters
+// https://www.loft.sh/blog/comparing-multi-tenancy-options-in-kubernetes#:~:text=Karmada's%20architecture%20is%20similar%20to%20vcluster.&text=You%20usually%20deploy%20it%20in,them%20to%20the%20local%20cluster.
