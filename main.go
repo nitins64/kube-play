@@ -174,3 +174,12 @@ func ListPods(namespace string, ncs NameClientset) (*v1.PodList, error) {
 
 // vCluster vs Karmada -- cost of keeping the upgrading clusters
 // https://www.loft.sh/blog/comparing-multi-tenancy-options-in-kubernetes#:~:text=Karmada's%20architecture%20is%20similar%20to%20vcluster.&text=You%20usually%20deploy%20it%20in,them%20to%20the%20local%20cluster.
+
+// Good read on concurrency in kubernetes: https://github.com/kubernetes/community/blob/master/contributors/devel/sig-architecture/api-conventions.md#types-kinds
+// kub design principles: https://github.com/kubernetes/design-proposals-archive/blob/main/architecture/principles.md#control-logic
+
+// cgroupv2 : https://facebookmicrosites.github.io/cgroup2/docs/overview
+
+// kubebuilder : https://book.kubebuilder.io/introduction
+// Controller runtime architecture: https://book.kubebuilder.io/architecture.html
+//controller-runtime : https://nakamasato.medium.com/kubernetes-operator-series-2-overview-of-controller-runtime-f8454522a539
