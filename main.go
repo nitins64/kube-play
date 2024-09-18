@@ -160,7 +160,7 @@ func ListPods(namespace string, ncs NameClientset) (*v1.PodList, error) {
 	return pods, nil
 }
 
-//https://github.com/karmada-io/karmada/tree/master/operator
+// https://github.com/karmada-io/karmada/tree/master/operator
 // https://www.cncf.io/blog/2022/09/26/karmada-and-open-cluster-management-two-new-approaches-to-the-multicluster-fleet-management-challenge/
 // https://multicluster.sigs.k8s.io/concepts/work-api/
 
@@ -182,4 +182,5 @@ func ListPods(namespace string, ncs NameClientset) (*v1.PodList, error) {
 
 // kubebuilder : https://book.kubebuilder.io/introduction
 // Controller runtime architecture: https://book.kubebuilder.io/architecture.html
-//controller-runtime : https://nakamasato.medium.com/kubernetes-operator-series-2-overview-of-controller-runtime-f8454522a539
+// controller-runtime : https://nakamasato.medium.com/kubernetes-operator-series-2-overview-of-controller-runtime-f8454522a539
+// ListWatch: https://www.mgasch.com/2021/01/listwatch-prologue/
