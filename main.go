@@ -184,3 +184,14 @@ func ListPods(namespace string, ncs NameClientset) (*v1.PodList, error) {
 // Controller runtime architecture: https://book.kubebuilder.io/architecture.html
 // controller-runtime : https://nakamasato.medium.com/kubernetes-operator-series-2-overview-of-controller-runtime-f8454522a539
 // ListWatch: https://www.mgasch.com/2021/01/listwatch-prologue/
+
+// TODO:
+// https://openai.com/index/scaling-kubernetes-to-7500-nodes/
+// interesting plugins: https://github.com/kubernetes-sigs/scheduler-plugins
+// Capacity Scheduling
+// Coscheduling
+// Node Resources
+// Node Resource Topology
+// Preemption Toleration
+// Trimaran (Load-Aware Scheduling)
+// Network-Aware Scheduling
