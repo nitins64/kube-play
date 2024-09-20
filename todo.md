@@ -49,3 +49,10 @@
   *   Preemption Toleration
   *   Trimaran (Load-Aware Scheduling)
   *   Network-Aware Scheduling
+
+
+**Perf testing**
+
+* https://github.com/kubernetes/community/blob/master/contributors/devel/sig-scalability/kubemark-guide.md
+*  https://github.com/kubernetes-sigs/kube-scheduler-simulator 
+
