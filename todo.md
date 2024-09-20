@@ -38,7 +38,7 @@
 *     controller-runtime : https://nakamasato.medium.com/kubernetes-operator-series-2-overview-of-controller-runtime-f8454522a539
     
 *     ListWatch: https://www.mgasch.com/2021/01/listwatch-prologue/
-    
+**Scaling kubenetes**    
 *     Scaling kub: https://openai.com/index/scaling-kubernetes-to-7500-nodes/
     
 * interesting plugins: https://github.com/kubernetes-sigs/scheduler-plugin    
