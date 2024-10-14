@@ -13,6 +13,7 @@ import (
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/tools/clientcmd"
+	"math/rand"
 	"os"
 	"path/filepath"
 	"time"
@@ -32,6 +33,13 @@ func getConfigPath() string {
 type NameClientset struct {
 	clientset *kubernetes.Clientset
 	name      string
+}
+
+var CLUSTER_NAME = "cluster"
+
+type NodeWithCluster struct {
+	node    *corev1.Node
+	cluster string
 }
 
 // getClientSet returns a clientset for a given context and kubeconfig path.
@@ -63,17 +71,17 @@ func main() {
 	kubeConfigPath := getConfigPath()
 
 	contextControllerName := flag.String("source-context", "kind-controller", "The name of the kubeconfig context to use for source")
-	contextAllocatorName := flag.String("dest-context", "kind-allocator", "The name of the kubeconfig context to use for source")
-	contextWk1Name := flag.String("worker-1-context", "kind-work-pool-1", "The name of the kubeconfig context to use for source")
-	contextWk2Name := flag.String("worker-2-context", "kind-work-pool-2", "The name of the kubeconfig context to use for source")
-	namespace := flag.String("namespace", "default", "The namespace to list pods in")
-	flag.Parse()
-
 	controllerClientSet, err := getClientSet(*contextControllerName, kubeConfigPath)
 	if err != nil {
 		fmt.Printf("error getting kubernetes config: %v\n", err)
 		os.Exit(1)
 	}
+
+	contextAllocatorName := flag.String("dest-context", "kind-allocator", "The name of the kubeconfig context to use for source")
+	contextWk1Name := flag.String("worker-1-context", "kind-work-pool-1", "The name of the kubeconfig context to use for source")
+	contextWk2Name := flag.String("worker-2-context", "kind-work-pool-2", "The name of the kubeconfig context to use for source")
+	namespace := flag.String("namespace", "default", "The namespace to list pods in")
+	flag.Parse()
 
 	allocatorClientset, err := getClientSet(*contextAllocatorName, kubeConfigPath)
 	if err != nil {
@@ -109,8 +117,7 @@ func main() {
 	//	os.Exit(1)
 	//}
 
-	go PodAllocationSyncer(*namespace, controllerClientSet, allocatorClientset, stopper)
-
+	go NodeAllocationSyncer(*namespace, worker2Clientset, allocatorClientset, stopper)
 	go NodeAllocationSyncer(*namespace, worker1Clientset, allocatorClientset, stopper)
 
 	// How do fake it without adding too much load on the system.
@@ -120,11 +127,208 @@ func main() {
 	go simulateHeartbeat(allocatorClientset.clientset, "work-pool-2-worker")
 	go simulateHeartbeat(allocatorClientset.clientset, "work-pool-2-worker2")
 
-	go NodeAllocationSyncer(*namespace, worker2Clientset, allocatorClientset, stopper)
+	go PodAllocationSyncer(*namespace, controllerClientSet, allocatorClientset, stopper)
+
+	go PodScheduler(*namespace, controllerClientSet, allocatorClientset, worker1Clientset, worker2Clientset, stopper)
+
+	go RunScheduledPod(*namespace, allocatorClientset, worker1Clientset, stopper)
+
+	go RunScheduledPod(*namespace, allocatorClientset, worker2Clientset, stopper)
 
 	//go PodAllocationSyncer(*namespace, allocatorClientset, stopper)
 
 	<-stopper
+}
+
+func RunScheduledPod(
+	namespace string,
+	allocatorClient NameClientset,
+	workerClientset NameClientset,
+	stopper chan struct{}) {
+	// create shared informers for resources in all known API group versions with a reSync period and namespace
+	workerFactory := informers.NewSharedInformerFactoryWithOptions(workerClientset.clientset, 10*time.Minute, informers.WithNamespace(namespace))
+	workerPodInformer := workerFactory.Core().V1().Pods().Informer()
+	workerNodeInformer := workerFactory.Core().V1().Nodes().Informer()
+
+	allocatorFactory := informers.NewSharedInformerFactoryWithOptions(allocatorClient.clientset, 10*time.Minute, informers.WithNamespace(namespace))
+	allocatorPodInformer := allocatorFactory.Core().V1().Pods().Informer()
+
+	defer runtime.HandleCrash()
+
+	go workerFactory.Start(stopper)
+	go allocatorFactory.Start(stopper)
+
+	allocatorPodInformer.AddEventHandler(cache.ResourceEventHandlerFuncs{
+		AddFunc: func(obj interface{}) {
+			fmt.Printf("TODO: handle update pod scheduler")
+		},
+		UpdateFunc: func(oldObj interface{}, newObj interface{}) {
+			//oldPod := oldObj.(*corev1.Pod)
+			newPod := newObj.(*corev1.Pod)
+
+			if newPod.Spec.NodeName != "" {
+
+				_, exists, err := workerNodeInformer.GetIndexer().GetByKey(newPod.Spec.NodeName)
+				if err != nil {
+					return
+				}
+				if !exists {
+					fmt.Printf("Cluster(%s) doesn't have node:%s\n", workerClientset.name, newPod.Spec.NodeName)
+					return
+				}
+
+				_, podExists, err := workerPodInformer.GetIndexer().GetByKey(newPod.Name)
+				if err != nil {
+					fmt.Printf("error getting pod in destination cluster: %v\n", err)
+					return
+				}
+				if !podExists {
+					podCopy := newPod.DeepCopy()
+					podCopy.ObjectMeta.OwnerReferences = nil
+					// newPod.ObjectMeta.Finalizers = []string{"kubernetes.io/pod-termination-protection"}
+					podCopy.ResourceVersion = "" // Clear the resource version to avoid conflicts
+					podCopy.Status = corev1.PodStatus{}
+					//newPod.Spec.SchedulerName = "custom-scheduler"
+					tenMin := int64(600)
+					podCopy.Spec.TerminationGracePeriodSeconds = &tenMin
+					podCopy.Spec.RestartPolicy = corev1.RestartPolicyAlways
+					p, err := workerClientset.clientset.CoreV1().Pods(podCopy.Namespace).Create(context.TODO(), podCopy, metav1.CreateOptions{})
+					if err != nil {
+						fmt.Printf("error creating pod(%s) in destination cluster(%s): %v\n", p.Name, workerClientset.name, err)
+						return
+					}
+					fmt.Printf("Pod(%s) created in destination cluster: %s\n", p.Name, workerClientset.name)
+					return
+				} else {
+					fmt.Printf("Handle update for POD in worker node!!!\n")
+				}
+			}
+
+		},
+		DeleteFunc: func(obj interface{}) {
+			fmt.Printf("TODO: handle delete pod scheduler\n")
+		},
+	})
+}
+
+func PodScheduler(
+	namespace string,
+	controllerClientSet NameClientset,
+	allocatorClient NameClientset,
+	worker1Clientset NameClientset,
+	worker2Clientset NameClientset,
+	stopper chan struct{}) {
+
+	// create shared informers for resources in all known API group versions with a reSync period and namespace
+	worker1Factory := informers.NewSharedInformerFactoryWithOptions(worker1Clientset.clientset, 10*time.Minute, informers.WithNamespace(namespace))
+	worker1NodeInformer := worker1Factory.Core().V1().Nodes().Informer()
+
+	// create shared informers for resources in all known API group versions with a reSync period and namespace
+	worker2Factory := informers.NewSharedInformerFactoryWithOptions(worker2Clientset.clientset, 10*time.Minute, informers.WithNamespace(namespace))
+	worker2NodeInformer := worker2Factory.Core().V1().Nodes().Informer()
+
+	allocatorFactory := informers.NewSharedInformerFactoryWithOptions(allocatorClient.clientset, 10*time.Minute, informers.WithNamespace(namespace))
+	allocatorPodInformer := allocatorFactory.Core().V1().Pods().Informer()
+
+	defer runtime.HandleCrash()
+
+	go worker1Factory.Start(stopper)
+	go worker2Factory.Start(stopper)
+	go allocatorFactory.Start(stopper)
+
+	// start to sync and call list
+	if !cache.WaitForCacheSync(stopper, worker1NodeInformer.HasSynced) {
+		runtime.HandleError(fmt.Errorf("timed out waiting for worker1NodeInformer to sync\n"))
+		return
+	}
+
+	// start to sync and call list
+	if !cache.WaitForCacheSync(stopper, worker2NodeInformer.HasSynced) {
+		runtime.HandleError(fmt.Errorf("timed out waiting for worker2NodeInformer to sync\n"))
+		return
+	}
+
+	// start to sync and call list
+	if !cache.WaitForCacheSync(stopper, allocatorPodInformer.HasSynced) {
+		runtime.HandleError(fmt.Errorf("timed out waiting for caches to sync\n"))
+		return
+	}
+
+	nodes := make([]NodeWithCluster, 0)
+	n := worker1NodeInformer.GetIndexer().List()
+	for _, node := range n {
+		n := node.(*corev1.Node)
+		_, exists := n.Labels["node-role.kubernetes.io/control-plane"]
+		if exists {
+			continue
+		}
+		nodes = append(nodes, NodeWithCluster{n, worker1Clientset.name})
+	}
+
+	n = worker2NodeInformer.GetIndexer().List()
+	for _, node := range n {
+		n := node.(*corev1.Node)
+		_, exists := n.Labels["node-role.kubernetes.io/control-plane"]
+		if exists {
+			continue
+		}
+		nodes = append(nodes, NodeWithCluster{n, worker1Clientset.name})
+	}
+
+	allocatorPodInformer.AddEventHandler(cache.ResourceEventHandlerFuncs{
+		AddFunc: func(obj interface{}) {
+			onAddPodScheduler(obj, allocatorClient, allocatorPodInformer, nodes)
+		},
+		UpdateFunc: func(oldObj interface{}, newObj interface{}) {
+			fmt.Printf("TODO: handle update pod scheduler\n")
+		},
+		DeleteFunc: func(obj interface{}) {
+			fmt.Printf("TODO: handle delete pod scheduler\n")
+		},
+	})
+
+}
+
+func bestFitNode(nodes []NodeWithCluster, pod *corev1.Pod) NodeWithCluster {
+	// Seed the random number generator
+	rand.Seed(time.Now().UnixNano())
+
+	// Generate a random index
+	randomIndex := rand.Intn(len(nodes))
+
+	// Return the node at the random index
+	return nodes[randomIndex]
+}
+
+func onAddPodScheduler(obj interface{}, allocatorClient NameClientset,
+	allocatorPodInformer cache.SharedIndexInformer, nodes []NodeWithCluster) {
+	pod := obj.(*corev1.Pod)
+
+	if pod.Spec.NodeName != "" {
+		fmt.Printf("Pod already scheduled: %s\n", pod.Name)
+		return
+	}
+
+	node := bestFitNode(nodes, pod)
+
+	//newPod := pod.DeepCopy()
+	//newPod.Spec.NodeName = node.node.Name
+	//if newPod.Annotations == nil {
+	//	newPod.Annotations = make(map[string]string)
+	//}
+	//newPod.Annotations[CLUSTER_NAME] = node.cluster
+
+	binding := &v1.Binding{
+		ObjectMeta: metav1.ObjectMeta{Namespace: pod.Namespace, Name: pod.Name, UID: pod.UID},
+		Target:     v1.ObjectReference{Kind: "Node", Name: node.node.Name},
+	}
+
+	err := allocatorClient.clientset.CoreV1().Pods(pod.Namespace).Bind(context.TODO(), binding, metav1.CreateOptions{})
+	if err != nil {
+		fmt.Printf("error creating pod in destination cluster: %v\n", err)
+		return
+	}
+	fmt.Printf("Pod (%s) scheduled on node(%s)\n", pod.Name, node.node.Name)
 }
 
 func NodeAllocationSyncer(namespace string, workerClientset NameClientset,
@@ -222,7 +426,7 @@ func PodAllocationSyncer(namespace string, controllerClient NameClientset, alloc
 
 func onAddNode(obj interface{}, allocatorClient NameClientset, allocatorNodeInformer cache.SharedIndexInformer) {
 	node := obj.(*corev1.Node)
-	fmt.Printf("Time:%s POD CREATED: %s/%s \n", time.Now().Format(time.RFC850), node.Namespace, node.Name)
+	fmt.Printf("Time:%s NODE CREATED: %s/%s \n", time.Now().Format(time.RFC850), node.Namespace, node.Name)
 
 	// Only add node for worker Role?
 	_, exists := node.Labels["node-role.kubernetes.io/control-plane"]
